@@ -25,7 +25,7 @@ do
   i=$((i + 1))
 done
 
-if [ $i -eq 5 ]; then
+if [ $i -eq 10 ]; then
   echo "Docker container didn't start correctly"
   return 1
 fi
