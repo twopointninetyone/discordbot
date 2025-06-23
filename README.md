@@ -6,6 +6,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ## Setup
 
+### API
 You can use any OpenAI compatible API, such as OpenRouter or ChutesAI.
 ChutesAI is free, here's how to set it up:
 
@@ -24,6 +25,7 @@ Copy the key, then add it onto the .env file.
 
 You can probably just discard the account now, there's no other use for it
 
+### .env file
 Edit the .ex_env file accordingly, and copy it into a .env file  
 ```sh
 vim .ex_env && cp .ex_env .env
