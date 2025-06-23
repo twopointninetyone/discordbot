@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serenity::all::Ready;
+use serenity::all::{Ready};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -267,6 +267,10 @@ impl EventHandler for Handler {
                     .expect("Error during ping");
             },
             "jp" => {
+                if msg.guild_id.is_none() {
+                    return;
+                };
+
                 let response: String = Self::get_ai_response(self, msg.channel_id.get())
                 .await
                 .expect("uh oh");
@@ -290,6 +294,8 @@ impl EventHandler for Handler {
 async fn main() {
     dotenv().ok();
 
+    // make sure all vars exist
+
     let bot_token = env::var("API_TOKEN")
         .expect("Please set the API_TOKEN in your .env file");
 
@@ -299,8 +305,6 @@ async fn main() {
     let ai_link = env::var("AI_URL")
         .expect("Please set the AI_URL in your .env file");
 
-    // check env vars
-    
     let ai_token = env::var("AI_TOKEN")
         .expect("Please set the AI_TOKEN in your .env file");
 
@@ -326,4 +330,3 @@ async fn main() {
         println!("{why:?}");
     }
 }
-
