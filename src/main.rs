@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serenity::all::{Guild, Ready, UserId};
+use serenity::all::{Ready, UserId};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -133,12 +133,10 @@ impl Handler {
             return Ok(());
         }
 
-        let result = sqlx::query!(
-            "DELETE FROM server_data WHERE server_id = ?",
-            guild_id.get()
-        )
-        .execute(&self.pool)
-        .await;
+        let result = sqlx::query("DELETE FROM server_data WHERE server_id = ?")
+            .bind(guild_id.get())
+            .execute(&self.pool)
+            .await;
 
         match result {
             Ok(_) => {
@@ -184,13 +182,10 @@ impl Handler {
     async fn get_ai_response(&self, server_id: u64) -> Result<String, Box<dyn std::error::Error>> {
         let sys_prompt = &self.sys_prompt;
 
-        let rows: Result<Vec<ServerData>, sqlx::Error> = sqlx::query_as!(
-            ServerData,
-            "SELECT json FROM server_data WHERE server_id = ?",
-            server_id
-        )
-        .fetch_all(&self.pool)
-        .await;
+        let rows: Result<Vec<ServerData>, sqlx::Error> = sqlx::query_as("SELECT json FROM server_data WHERE server_id = ?")
+            .bind(server_id)
+            .fetch_all(&self.pool)
+            .await;
 
         let mut messages = vec![];
 
@@ -273,25 +268,25 @@ impl Handler {
             _ => eprintln!("Content Not Found")
         }
 
-        let _ = sqlx::query!(
-            "INSERT INTO server_data (server_id, json) VALUES (?, ?)",
-            server_id,
-            serde_json::to_value(Role { // turn Role struct into string JSON
-                role: "assistant".into(),
-                content: {
-                    let res: Vec<String> = response_message
-                        .split("\n")
-                        .map(|item| item.to_string())
-                        .collect();
+        let role = Role {
+            role: "assistant".into(),
+            content: {
+                response_message
+                    .split("\n")
+                    .next()
+                    .map(String::from)
+                    .unwrap_or_else(|| String::from("nil"))
+            }
+        };
 
-                    res.first()
-                        .expect("wtf")
-                        .into()
-                }
-            })?
-        )
-        .execute(&self.pool)
-        .await?;
+
+        let role_json: String = serde_json::to_value(role)?.to_string();
+
+        let _ = sqlx::query("INSERT INTO server_data (server_id, json) VALUES (?, ?)")
+            .bind(server_id)
+            .bind(role_json)
+            .execute(&self.pool)
+            .await?;
             
         Ok(response_message)
     }
