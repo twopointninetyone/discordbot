@@ -14,6 +14,7 @@ use std::env;
 struct Handler {
     command_prefix: String,
     commands: Vec<CommandInfo>,
+    ai_link: String,
     ai_token: String,
     sys_prompt: String,
     pool: sqlx::MySqlPool
@@ -44,7 +45,7 @@ struct ServerData {
 
 impl Handler {
     // mm yeah, uhh.. creating new Handler object I think
-    async fn new(prefix: String, sys_prompt: String, ai_token: String) -> Self {
+    async fn new(prefix: String, sys_prompt: String, ai_link: String, ai_token: String) -> Self {
         let commands = vec![
             CommandInfo {
                 name: "help".into(),
@@ -63,6 +64,7 @@ impl Handler {
         Handler {
             command_prefix: prefix,
             commands,
+            ai_link,
             ai_token,
             sys_prompt,
             pool: MySqlPoolOptions::new()
@@ -196,7 +198,7 @@ impl Handler {
             })
             .build()?;
 
-        let response: Value = client.post("https://llm.chutes.ai/v1/chat/completions")
+        let response: Value = client.post(&self.ai_link)
             .json(&json_body)
             .send()
             .await?
@@ -291,6 +293,9 @@ async fn main() {
     let bot_token = env::var("API_TOKEN")
         .expect("Please set the API_TOKEN in your .env file");
 
+    let ai_link = env::var("AI_URL")
+        .expect("Please set the AI_URL in your .env file");
+
     // check env vars
     
     let ai_token = env::var("AI_TOKEN")
@@ -302,7 +307,7 @@ async fn main() {
     let intents = GatewayIntents::all();
 
     let mut client = Client::builder(bot_token, intents)
-        .event_handler(Handler::new("!".into(), sys_prompt.into(), ai_token.into()).await)
+        .event_handler(Handler::new("!".into(), sys_prompt.into(), ai_link.into(), ai_token.into()).await)
         .await
         .map_err(|e| eprintln!("{}", e.to_string()))
         .expect("error during client creation");

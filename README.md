@@ -7,7 +7,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ## Setup
 
 ### API
-You can use any OpenAI compatible API, such as OpenRouter or ChutesAI.
+You can use any OpenAI compatible API.
+
 ChutesAI is free, here's how to set it up:
 
 Go to ```https://chutes.ai/auth/start```
