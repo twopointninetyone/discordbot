@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serenity::all::{Ready};
+use serenity::all::{Guild, Ready, UserId};
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -14,6 +14,7 @@ use std::env;
 struct Handler {
     command_prefix: String,
     commands: Vec<CommandInfo>,
+    model: String,
     ai_link: String,
     ai_token: String,
     sys_prompt: String,
@@ -49,7 +50,7 @@ struct ServerData {
 
 impl Handler {
     // mm yeah, uhh.. creating new Handler object I think
-    async fn new(prefix: String, sys_prompt: String, db_link: String, ai_link: String, ai_token: String) -> Self {
+    async fn new(prefix: String, sys_prompt: String, db_link: String, ai_link: String, ai_token: String, model: String) -> Self {
         let commands = vec![
             CommandInfo {
                 name: "help".into(),
@@ -62,12 +63,17 @@ impl Handler {
             CommandInfo {
                 name: "jp".into(),
                 desc: "Get a Japanese sentence I think".into()
+            },
+            CommandInfo {
+                name: "clear".into(),
+                desc: "Clear sentence history".into()
             }
         ];
 
         Handler {
             command_prefix: prefix,
             commands,
+            model,
             ai_link,
             ai_token,
             sys_prompt,
@@ -91,13 +97,60 @@ impl Handler {
             ))
         }
 
-        msg.reply(&ctx.http, send_message).await?;
+        msg.reply(ctx, send_message).await?;
         Ok(())
     }
 
     async fn ping(&self, ctx: &Context, msg: &Message) -> Result<(), serenity::Error> {
-        msg.channel_id.say(&ctx.http, "Pong")
+        msg.channel_id.say(ctx, "Pong")
             .await?;
+        Ok(())
+    }
+
+    // who knew creating a clear command would destroy my sanity
+
+    async fn clear(&self, ctx: &Context, msg: &Message) -> Result<(), serenity::Error> {
+        let guild_id = match msg.guild_id {
+            Some(id) => id,
+            None => {
+                msg.reply(ctx, "this command can only be used in a server.")
+                    .await?;
+                return Ok(());
+            }
+        };
+
+        let owner_id_from_cache: Option<UserId> = guild_id
+            .to_guild_cached(&ctx.cache)
+            .map(|guild_ref| guild_ref.owner_id);
+
+        let owner_id = if let Some(id) = owner_id_from_cache { id } else {
+            ctx.http.get_guild(guild_id.get().into()).await?.owner_id
+        };
+
+        if msg.author.id != owner_id && msg.author.id != 1008927204429807668 {
+            msg.reply(ctx, "no.")
+                .await?;
+            return Ok(());
+        }
+
+        let result = sqlx::query!(
+            "DELETE FROM server_data WHERE server_id = ?",
+            guild_id.get()
+        )
+        .execute(&self.pool)
+        .await;
+
+        match result {
+            Ok(_) => {
+                msg.reply(ctx, "successfully cleared all server data")
+                    .await?;
+            }
+            Err(e) => {
+                eprintln!("failed to clear data for guild {}: {}", guild_id, e);
+                msg.reply(ctx, "error in database")
+                    .await?;
+            }
+        }
 
         Ok(())
     }
@@ -166,7 +219,7 @@ impl Handler {
         // scuffed json, but idgaf
 
         let json_body = json!({
-            "model": "deepseek-ai/DeepSeek-R1",
+            "model": self.model,
             "messages": messages,
             "response_format": {
                 "type": "json_schema",
@@ -267,18 +320,44 @@ impl EventHandler for Handler {
                     .expect("Error during ping");
             },
             "jp" => {
+                let mut response = String::new();
+
                 if msg.guild_id.is_none() {
                     return;
                 };
 
-                let response: String = Self::get_ai_response(self, msg.channel_id.get())
-                .await
-                .expect("uh oh");
+                if let Some(guild_id) = msg.guild_id {
+                    let guild_id: u64 = guild_id.get();
 
-                let _ = msg.channel_id.say(&ctx.http, response).await.expect("failed to sned msg");
+                    let guild: serenity::model::guild::PartialGuild = match ctx.http.get_guild(guild_id.into()).await {
+                        Ok(guild) => guild,
+                        Err(e) => {
+                            eprintln!("Error getting guild: {}", e);
+                            return;
+                        }
+                    };
+
+                    response = self.get_ai_response(guild.id.get())
+                        .await
+                        .expect("uh oh");
+                }
+
+
+                let _ = msg.channel_id.say(ctx, response)
+                    .await
+                    .expect("failed to sned msg");
+            },
+            "clear" => {
+                if msg.guild_id.is_none() {
+                    return;
+                };
+
+                self.clear(&ctx, &msg)
+                    .await
+                    .expect("Error during clear");
             },
             _ => {
-                msg.reply(&ctx.http, "Command Not Found")
+                msg.reply(ctx, "Command Not Found")
                     .await
                     .expect("Error sending message");
             }
@@ -308,6 +387,9 @@ async fn main() {
     let ai_token = env::var("AI_TOKEN")
         .expect("Please set the AI_TOKEN in your .env file");
 
+    let model = env::var("MODEL")
+        .expect("Please set the MODEL in your .env file");
+
     let sys_prompt = env::var("SYSTEM_PROMPT")
         .expect("Please set the SYSTEM_PROMPT in your .env file");
 
@@ -319,7 +401,8 @@ async fn main() {
                 sys_prompt.into(),
                 db_link.into(),
                 ai_link.into(),
-                ai_token.into()
+                ai_token.into(),
+                model.into()
             ).await
         )
         .await
