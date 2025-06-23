@@ -25,6 +25,8 @@ struct CommandInfo {
     desc: String
 }
 
+// to parse message from the AI
+
 #[derive(Deserialize)]
 struct AiResponse {
     sentence: String,
@@ -37,6 +39,8 @@ struct Role {
     role: String,
     content: String
 }
+
+// to serialize full response message into a JSON, then save it onto DB
 
 #[derive(Serialize, FromRow)]
 struct ServerData {
@@ -98,6 +102,8 @@ impl Handler {
         Ok(())
     }
 
+    // to parse JSON response from AI
+
     async fn parse_to_content(json: &Value) -> Option<AiResponse> {
         let message = json
             .get("choices")
@@ -119,6 +125,8 @@ impl Handler {
             as_english: content_json.get("as_english")?.to_string()
         })
     }
+
+    // make api call yeah
 
     async fn get_ai_response(&self, server_id: u64) -> Result<String, Box<dyn std::error::Error>> {
         let sys_prompt = &self.sys_prompt;
@@ -215,7 +223,7 @@ impl Handler {
         let _ = sqlx::query!(
             "INSERT INTO server_data (server_id, json) VALUES (?, ?)",
             server_id,
-            serde_json::to_value(Role {
+            serde_json::to_value(Role { // turn Role struct into string JSON
                 role: "assistant".into(),
                 content: {
                     let res: Vec<String> = response_message
@@ -242,14 +250,6 @@ impl EventHandler for Handler {
         if msg.author.id == ctx.cache.current_user().id { 
             return;
         };
-
-        if msg.channel_id == 1261060300979834965 { // jp command basically
-            let response: String = Self::get_ai_response(self, msg.channel_id.get())
-                .await
-                .expect("uh oh");
-
-            let _ = msg.channel_id.say(&ctx.http, response).await.expect("failed to sned msg");
-        }
 
         if !msg.content.starts_with("!") {
             return;
