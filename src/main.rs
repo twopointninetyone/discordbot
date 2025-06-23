@@ -15,6 +15,7 @@ struct Handler {
     command_prefix: String,
     commands: Vec<CommandInfo>,
     model: String,
+    temperature: f32,
     ai_link: String,
     ai_token: String,
     sys_prompt: String,
@@ -50,7 +51,7 @@ struct ServerData {
 
 impl Handler {
     // mm yeah, uhh.. creating new Handler object I think
-    async fn new(prefix: String, sys_prompt: String, db_link: String, ai_link: String, ai_token: String, model: String) -> Self {
+    async fn new(prefix: String, sys_prompt: String, db_link: String, ai_link: String, ai_token: String, model: String, temperature: f32) -> Self {
         let commands = vec![
             CommandInfo {
                 name: "help".into(),
@@ -74,6 +75,7 @@ impl Handler {
             command_prefix: prefix,
             commands,
             model,
+            temperature,
             ai_link,
             ai_token,
             sys_prompt,
@@ -214,26 +216,28 @@ impl Handler {
         // scuffed json, but idgaf
 
         let json_body = json!({
-            "model": self.model,
+            "model": &self.model,
+            "temperature": &self.temperature,
             "messages": messages,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": "Japanese Sentence",
+                    "strict": true,
                     "schema": {
                         "type": "object",
                         "properties": {
                             "sentence": {
                                 "type": "string",
-                                "description": "JP sentence to give to the user"
+                                "description": "The full JP sentence to give to the user, with Kanji and everything else. Must be bolded, to make the sentence stand out. Must be completely unique, not in message history."
                             },
                             "as_hiragana": {
                                 "type": "string",
-                                "description": "The sentence, but entirely in Hiragana."
+                                "description": "The sentence, but in Hiragana, no Kanji, Katakana is kept though. Not bolded."
                             },
                             "as_english": {
                                 "type": "string",
-                                "description": "The sentence, in English."
+                                "description": "The sentence, in full English. Not bolded."
                             }
                         },
                         "required": ["sentence", "as_hiragana", "as_english"],
@@ -278,7 +282,6 @@ impl Handler {
                     .unwrap_or_else(|| String::from("nil"))
             }
         };
-
 
         let role_json: String = serde_json::to_value(role)?.to_string();
 
@@ -337,7 +340,6 @@ impl EventHandler for Handler {
                         .expect("uh oh");
                 }
 
-
                 let _ = msg.channel_id.say(ctx, response)
                     .await
                     .expect("failed to sned msg");
@@ -385,6 +387,11 @@ async fn main() {
     let model = env::var("MODEL")
         .expect("Please set the MODEL in your .env file");
 
+    let temperature: f32 = env::var("TEMPERATURE")
+        .expect("Please set the TEMPERATURE in your .env file")
+        .parse()
+        .expect("TEMPERATURE must be a valid number");
+
     let sys_prompt = env::var("SYSTEM_PROMPT")
         .expect("Please set the SYSTEM_PROMPT in your .env file");
 
@@ -397,7 +404,8 @@ async fn main() {
                 db_link.into(),
                 ai_link.into(),
                 ai_token.into(),
-                model.into()
+                model.into(),
+                temperature
             ).await
         )
         .await
