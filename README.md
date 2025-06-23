@@ -13,6 +13,7 @@ Go to ```https://chutes.ai/auth/start```
 Create an account, no email/password needed
 
 ![Account Creation Example](images/1.png)
+
 Once you do that, it should look like this.
 
 Now click "Continue To Chutes", you should be on the home page.
