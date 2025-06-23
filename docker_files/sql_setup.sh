@@ -1,0 +1,7 @@
+### THIS IS FOR THE DOCKER CONTAINER. DON'T RUN THIS (plz)
+
+#!/bin/bash
+
+SQL_FILE="/init.sql"
+
+mariadb -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -D "$MYSQL_DATABASE" < "$SQL_FILE"

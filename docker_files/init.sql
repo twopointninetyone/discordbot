@@ -1,0 +1,7 @@
+CREATE DATABASE IF NOT EXISTS db;
+USE db;
+
+CREATE TABLE IF NOT EXISTS server_data (
+  server_id BIGINT,
+  json JSON
+);
