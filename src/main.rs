@@ -45,7 +45,7 @@ struct ServerData {
 
 impl Handler {
     // mm yeah, uhh.. creating new Handler object I think
-    async fn new(prefix: String, sys_prompt: String, ai_link: String, ai_token: String) -> Self {
+    async fn new(prefix: String, sys_prompt: String, db_link: String, ai_link: String, ai_token: String) -> Self {
         let commands = vec![
             CommandInfo {
                 name: "help".into(),
@@ -68,7 +68,7 @@ impl Handler {
             ai_token,
             sys_prompt,
             pool: MySqlPoolOptions::new()
-                .connect(&env::var("DATABASE_URL").expect("DATABASE_URL not set"))
+                .connect(&db_link)
                 .await
                 .unwrap_or_else(|_err| { panic!("Couldn't connect to database")})
         }
@@ -209,7 +209,7 @@ impl Handler {
 
         match Self::parse_to_content(&response).await {
             Some(r) => response_message = format!("{}\n||in Hiragana: {}||\n||in English: {}||", r.sentence, r.as_hiragana, r.as_english),
-            None => eprintln!("Content Not Found")
+            _ => eprintln!("Content Not Found")
         }
 
         let _ = sqlx::query!(
@@ -293,6 +293,9 @@ async fn main() {
     let bot_token = env::var("API_TOKEN")
         .expect("Please set the API_TOKEN in your .env file");
 
+    let db_link = env::var("DATABASE_URL")
+        .expect("Please set the DATABASE_URL in your .env file");
+
     let ai_link = env::var("AI_URL")
         .expect("Please set the AI_URL in your .env file");
 
@@ -307,7 +310,14 @@ async fn main() {
     let intents = GatewayIntents::all();
 
     let mut client = Client::builder(bot_token, intents)
-        .event_handler(Handler::new("!".into(), sys_prompt.into(), ai_link.into(), ai_token.into()).await)
+        .event_handler(Handler::new(
+                "!".into(),
+                sys_prompt.into(),
+                db_link.into(),
+                ai_link.into(),
+                ai_token.into()
+            ).await
+        )
         .await
         .map_err(|e| eprintln!("{}", e.to_string()))
         .expect("error during client creation");
